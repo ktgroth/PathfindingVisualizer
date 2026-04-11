@@ -1,25 +1,30 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "include/maze_generator.h"
 
 
-int init_maze(maze_t *maze, size_t N)
+int init_maze(maze_t *maze, int N)
 {
     if (!maze || N < 3 || N % 2 == 0)
         return 1;
 
     maze->N = N;
-    maze->walls = (int8_t *)calloc(4*N*N, sizeof(int8_t));
+    maze->walls = (int8_t *)malloc(N*N * sizeof(int8_t));
     if (!maze->walls)
     {
         perror("Allocation of maze walls");
         return 1;
     }
 
-    cell_t *stack = (cell_t *)malloc(4*N*N * sizeof(cell_t));
+    for (int i = 0; i < N; ++i)
+        for (int j = 0; j < N; ++j)
+            maze->walls[IX(j, i, N)] = WALL;
+
+    cell_t *stack = (cell_t *)malloc(N*N * sizeof(cell_t));
     if (!stack)
     {
         perror("Generating maze paths");
@@ -31,9 +36,7 @@ int init_maze(maze_t *maze, size_t N)
     stack[0] = (cell_t){ 1, 1 };
     int stack_top = 0;
 
-    maze->walls[IX(1, 0, N)] = OPEN;
-    maze->walls[IX(1, 1, N)] = OPEN;
-    maze->walls[IX(N - 1, N - 2, N)] = OPEN;
+    maze->walls[IX(1, 0, N)] = OPEN | START;
     while (stack_top >= 0)
     {
         int x = stack[stack_top].x, y = stack[stack_top].y;
@@ -48,7 +51,7 @@ int init_maze(maze_t *maze, size_t N)
             if (nx <= 0 || nx >= N - 1 || ny <= 0 || ny >= N - 1)
                 continue;
 
-            if (maze->walls[IX(nx, ny, N)] == OPEN)
+            if (maze->walls[IX(nx, ny, N)] & OPEN)
                 continue;
 
             possible[count++] = dir;
@@ -69,8 +72,27 @@ int init_maze(maze_t *maze, size_t N)
         maze->walls[IX(nx, ny, N)] = OPEN;
         stack[++stack_top] = (cell_t){ nx, ny };
     }
+    maze->walls[IX(N - 1, N - 2, N)] = OPEN | END;
 
     free(stack);
+    return 0;
+}
+
+int copy_maze(maze_t *src, maze_t *dst)
+{
+    if (!src || !dst)
+        return 1;
+
+    int N = src->N;
+    dst->N = N;
+    dst->walls = (int8_t *)malloc(N*N * sizeof(int8_t));
+    if (!dst->walls)
+    {
+        perror("Copying of walls");
+        return 1;
+    }
+
+    memcpy(dst->walls, src->walls, N*N * sizeof(int8_t));
     return 0;
 }
 

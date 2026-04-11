@@ -5,23 +5,24 @@
 #include <stdint.h>
 
 
-#define WALL        0
-#define OPEN        1
-#define UNVISITED   1
-#define VISITED     2
+#define WALL        0b00001
+#define OPEN        0b00010
+#define VISITED     0b00100
+#define START       0b01000
+#define END         0b10000
 
-#define IX(x, y, N) ((y) * (4*N) + (x))
+#define IX(x, y, N) ((y) * (N) + (x))
 
 
 static int8_t dirs[4][2]  = { { 2, 0 }, { -2, 0 }, { 0, 2 }, { 0, -2 } };
-static int8_t ddirs[8][2] = 
+static int8_t ddirs[8][2] =
     { {  1,  0 }, { -1,  0 }, {  0,  1 }, {  0, -1 },
       {  1,  1 }, { -1,  1 }, {  1, -1 }, { -1, -1 } };
 
 
 typedef struct
 {
-    size_t  N;
+    int N;
     int8_t  *walls;
 } maze_t;
 
@@ -31,7 +32,8 @@ typedef struct
 } cell_t;
 
 
-int init_maze(maze_t *maze, size_t N);
+int init_maze(maze_t *maze, int N);
+int copy_maze(maze_t *src, maze_t *dst);
 void free_maze(maze_t *maze);
 
 #endif
