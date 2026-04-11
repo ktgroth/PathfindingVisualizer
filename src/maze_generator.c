@@ -6,14 +6,6 @@
 #include "include/maze_generator.h"
 
 
-int8_t dirs[4][2] = { { 2, 0 }, { -2, 0 }, { 0, 2 }, { 0, -2 } };
-
-
-typedef struct
-{
-    int x, y;
-} cell_t;
-
 int init_maze(maze_t *maze, size_t N)
 {
     if (!maze || N < 3 || N % 2 == 0)

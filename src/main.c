@@ -2,6 +2,8 @@
 #include <stdio.h>
 
 #include "include/maze_generator.h"
+#include "include/breadth_first.h"
+#include "include/depth_first.h"
 
 
 int main(int argc, char **argv)
@@ -13,11 +15,26 @@ int main(int argc, char **argv)
     if (init_maze(&maze, N))
         return 1;
 
-
+    df_search(&maze);
     for (size_t i = 0; i < N; ++i)
     {
         for (size_t j = 0; j < N; ++j)
-            printf("%c", maze.walls[IX(i, j, N)] == WALL ? '#' : ' ');
+        {
+            switch (maze.walls[IX(j, i, N)])
+            {
+                case WALL:
+                    printf("#");
+                    break;
+
+                case OPEN:
+                    printf(" ");
+                    break;
+
+                case VISITED:
+                    printf("*");
+                    break;
+            }
+        }
         printf("\n");
     }
 
