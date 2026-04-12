@@ -3,8 +3,8 @@
 CC="gcc"
 LD="gcc"
 
-CFLAGS="-O2 -Wall -Wextra -g -Iinclude"
-LFLAGS="-lglfw -lGLEW -lGL"
+CFLAGS="-O2 -Wall -Wextra -g -Iinclude -I/usr/include/freetype2 -I/usr/include/libpng16"
+LFLAGS="-lglfw -lGLEW -lGL -lfreetype"
 
 SRC=src
 OBJ=obj
@@ -21,6 +21,8 @@ done
 OUTPUT=$BUILD/fd
 
 function build {
+    clean
+
     mkdir -p $OBJ
     mkdir -p $BUILD
 
