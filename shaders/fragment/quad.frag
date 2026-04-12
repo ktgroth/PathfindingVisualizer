@@ -3,10 +3,8 @@
 in vec2 uv;
 
 out vec4 FragColor;
-
-uniform sampler2D fluidTex;
+uniform vec3 uColor;
 
 void main() {
-    float dens = texture(fluidTex, uv).b;
-    FragColor = vec4(0.0, 0.0, dens, 1.0); // blue fluid
+    FragColor = vec4(uColor, 1.0);
 }

@@ -5,27 +5,22 @@
 #include "maze_generator.h"
 
 
-static const float quad[] = {
-    -1.0f, -1.0f,  0.0f,  0.0f,
-     1.0f, -1.0f,  1.0f,  0.0f,
-     1.0f,  1.0f,  1.0f,  1.0f,
+#define BF  1
+#define DF  2
 
-    -1.0f, -1.0f,  0.0f,  0.0f,
-     1.0f,  1.0f,  1.0f,  1.0f,
-    -1.0f,  1.0f,  0.0f,  1.0f
-};
+extern volatile int fb_width, fb_height;
+extern volatile int win_width, win_height;
+extern volatile double mx, my;
 
 
-static volatile int fb_width = 1080, fb_height = 720;
-static volatile int win_width = 1080, win_height = 720;
-static volatile double mx = 0, my = 0;
+typedef void (*step)(maze_t *maze);
 
 
 int init_graphics(int N);
 void free_graphics();
 cell_t *get_collection();
-void draw();
-void update();
+void draw(maze_t *maze);
+void update(maze_t *maze, step fn);
 
 #endif
 

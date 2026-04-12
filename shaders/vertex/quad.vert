@@ -1,11 +1,11 @@
 #version 330 core
 layout (location = 0) in vec2 aPos;
-layout (location = 1) in vec2 aUV;
 
-out vec2 uv;
+uniform vec2 uOffset;
+uniform vec2 uScale;
 
 void main() {
-    uv = aUV;
-    gl_Position = vec4(aPos.xy, 0.0, 1.0);
+    vec2 pos = uOffset + aPos * uScale;
+    gl_Position = vec4(pos, 0.0, 1.0);
 }
 
