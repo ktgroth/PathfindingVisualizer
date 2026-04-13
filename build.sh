@@ -40,9 +40,7 @@ function comp {
 }
 
 function run {
-    if [ ! -e "$OUTPUT" ]; then
-        build
-    fi
+    build
     ./$OUTPUT
 }
 

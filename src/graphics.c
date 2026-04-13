@@ -7,6 +7,8 @@
 #include FT_FREETYPE_H
 
 #include "include/graphics.h"
+#include "include/heuristic.h"
+#include "include/astar.h"
 #include "include/breadth_first.h"
 #include "include/depth_first.h"
 #include "include/shader.h"
@@ -37,8 +39,9 @@ typedef struct
 } glyph_t;
 
 
-#define BF  1
-#define DF  2
+#define BF      1
+#define DF      2
+#define ASTAR   3
 
 static const float quad[] = {
     0.0f, 0.0f,
@@ -82,9 +85,11 @@ static GLint textProjLoc, textColorLoc;
 
 static maze_t maze, copy;
 static step alg = bf_step;
+volatile heuristic h = manhattan_dist;
 static int mode = BF;
-static int sx = 1, sy = 0;
 static int N;
+static int sx = 1, sy = 0;
+static int ex, ey;
 
 
 static void draw_scene()
@@ -182,34 +187,164 @@ static int menu_hit_test(double mx, double my)
     return idx;
 }
 
+static int PAUSE = 1;
+static void switch_to_bf()
+{
+    PAUSE = 1;
+    mode = BF;
+    copy_maze(&maze, &copy);
+    init_bf(&copy, sx, sy);
+    alg = bf_step;
+}
+
+static void switch_to_df()
+{
+    PAUSE = 1;
+    mode = DF;
+    copy_maze(&maze, &copy);
+    init_df(&copy, sx, sy);
+    alg = df_step;
+}
+
+static void switch_to_astar()
+{
+    PAUSE = 1;
+    mode = ASTAR;
+    copy_maze(&maze, &copy);
+    init_astar(&copy, sx, sy, ex, ey);
+    alg = astar_step;
+}
+
+static void make_new()
+{
+    PAUSE = 1;
+    free_maze(&maze);
+    free_maze(&copy);
+
+    init_maze(&maze, N);
+    copy_maze(&maze, &copy);
+    if (mode == BF)
+        init_bf(&copy, sx, sy);
+    if (mode == DF)
+        init_df(&copy, sx, sy);
+    if (mode == ASTAR)
+        init_astar(&copy, sx, sy, ex, ey);
+}
+
+static void create_custom_maze()
+{
+    PAUSE = 1;
+
+}
+
+static void clear_maze()
+{
+    PAUSE = 1;
+    copy_maze(&maze, &copy);
+    if (mode == BF)
+        init_bf(&copy, sx, sy);
+    if (mode == DF)
+        init_df(&copy, sx, sy);
+    if (mode == ASTAR)
+        init_astar(&copy, sx, sy, ex, ey);
+}
+
 static void do_menu_action(int id)
 {
     switch (id)
     {
         case 1:
             printf("Run BFS\n");
+            switch_to_bf();
             break;
 
         case 2:
             printf("Run DFS\n");
+            switch_to_df();
             break;
 
         case 3:
             printf("Run A*\n");
+            switch_to_astar();
             break;
 
         case 4:
             printf("New Maze\n");
+            make_new();
             break;
 
         case 5:
             printf("Custom Maze\n");
+            create_custom_maze();
             break;
 
         case 6:
             printf("Clear\n");
+            clear_maze();
             break;
     }
+}
+
+static int HOLDING = 0;
+static void process_input(GLFWwindow *window)
+{
+    int ESC = glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
+    int SPACE = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+
+    int CK = glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS;
+    int SK = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
+    int NK = glfwGetKey(window, GLFW_KEY_N) == GLFW_PRESS;
+    int BK = glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS;
+    int DK = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
+    int AK = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
+
+    if (!HOLDING && ESC)
+        glfwSetWindowShouldClose(window, true);
+
+    if (!HOLDING && CK)
+    {
+        HOLDING = 1;
+        clear_maze();
+    }
+
+    if (!HOLDING && SK)
+    {
+        HOLDING = 1;
+        update();
+    }
+
+    if (!HOLDING && NK)
+    {
+        HOLDING = 1;
+        make_new();
+    }
+
+    if (!HOLDING && BK)
+    {
+        HOLDING = 1;
+        switch_to_bf();
+    }
+
+    if (!HOLDING && DK)
+    {
+        HOLDING = 1;
+        switch_to_df();
+    }
+
+    if (!HOLDING && AK)
+    {
+        HOLDING = 1;
+        switch_to_astar();
+    }
+
+    if (!HOLDING && SPACE)
+    {
+        HOLDING = 1;
+        PAUSE = !PAUSE;
+    }
+
+    if (!ESC && !CK && !SK && !NK && !BK && !DK && !AK && !SPACE)
+        HOLDING = 0;
 }
 
 static void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
@@ -367,69 +502,6 @@ static void draw_menu(void)
     }
 }
 
-static int HOLDING = 0;
-static int PAUSE = 1;
-static void process_input(GLFWwindow *window)
-{
-    int ESC = glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
-    int SPACE = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-
-    int SK = glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS;
-    int NK = glfwGetKey(window, GLFW_KEY_N) == GLFW_PRESS;
-    int BK = glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS;
-    int DK = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
-
-    if (!HOLDING && ESC)
-        glfwSetWindowShouldClose(window, true);
-
-    if (!HOLDING && SK)
-    {
-        HOLDING = 1;
-        update();
-    }
-
-    if (!HOLDING && NK)
-    {
-        HOLDING = 1;
-        free_maze(&maze);
-        free_maze(&copy);
-
-        init_maze(&maze, N);
-        copy_maze(&maze, &copy);
-        if (mode == BF)
-            init_bf(&copy, sx, sy);
-        if (mode == DF)
-            init_df(&copy, sx, sy);
-    }
-
-    if (!HOLDING && BK)
-    {
-        HOLDING = 1;
-        mode = BF;
-        copy_maze(&maze, &copy);
-        init_bf(&copy, sx, sy);
-        alg = bf_step;
-    }
-
-    if (!HOLDING && DK)
-    {
-        HOLDING = 1;
-        mode = DF;
-        copy_maze(&maze, &copy);
-        init_df(&copy, sx, sy);
-        alg = df_step;
-    }
-
-    if (!HOLDING && SPACE)
-    {
-        HOLDING = 1;
-        PAUSE = !PAUSE;
-    }
-
-    if (!ESC && !SK && !NK && !BK && !DK && !SPACE)
-        HOLDING = 0;
-}
-
 static int init_text(const char *font_path)
 {
     FT_Library ft;
@@ -563,6 +635,8 @@ GLFWwindow *init_graphics()
 
     int n = 25;
     N = 2*n + 1;
+    ex = N - 1;
+    ey = N - 2;
     if (init_maze(&maze, N))
         return NULL;
 

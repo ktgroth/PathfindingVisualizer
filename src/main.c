@@ -5,9 +5,7 @@
 
 #include "include/graphics.h"
 #include "include/maze_generator.h"
-#include "include/breadth_first.h"
-#include "include/depth_first.h"
-
+#include "include/astar.h"
 
 void print_maze(maze_t *maze)
 {
