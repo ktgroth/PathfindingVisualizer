@@ -20,6 +20,32 @@ typedef struct
     int id;
 } menu_item_t;
 
+typedef enum
+{
+    MENU_MAIN,
+    MENU_HEURISTIC
+} menu_kind_t;
+
+typedef enum
+{
+    TOOL_WALL,
+    TOOL_ERASE,
+    TOOL_START,
+    TOOL_END
+} custom_tool_t;
+
+#define ACT_RUN_BFS         1
+#define ACT_RUN_DFS         2
+#define ACT_RUN_ASTAR       3
+#define ACT_NEW_MAZE        4
+#define ACT_CUSTOM_MAZE     5
+#define ACT_CLEAR           6
+
+#define ACT_H_MANHATTAN     101
+#define ACT_H_EUCLIDEAN     102
+#define ACT_H_CHEBYSHEV     103
+#define ACT_BACK            199
+
 typedef struct
 {
     int open;
@@ -27,6 +53,7 @@ typedef struct
     float w, h;
     int hover;
     int count;
+    menu_kind_t kind;
     menu_item_t items[8];
 } menu_t;
 
@@ -42,6 +69,7 @@ typedef struct
 #define BF      1
 #define DF      2
 #define ASTAR   3
+#define CUSTOM  4
 
 static const float quad[] = {
     0.0f, 0.0f,
@@ -63,6 +91,7 @@ static menu_t menu = {
     .h = 28.0f,
     .hover = -1,
     .count = 6,
+    .kind = MENU_MAIN,
     .items = {
         { "Run BFS",        1 },
         { "Run DFS",        2 },
@@ -84,19 +113,96 @@ static GLint uOffsetLoc, uScaleLoc, uColorLoc;
 static GLint textProjLoc, textColorLoc;
 
 static maze_t maze, copy;
+static custom_tool_t custom_tool = TOOL_WALL;
 static step alg = bf_step;
 volatile heuristic h = manhattan_dist;
 static int mode = BF;
+static int custom_mode = 0;
 static int N;
 static int sx = 1, sy = 0;
 static int ex, ey;
 
+
+static int screen_to_cell(double mx, double my, int *cx, int *cy)
+{
+    if (mx < 0 || my < 0 || mx >= win_width || my >= win_height)
+        return 0;
+
+    int x = (int)(mx * copy.N / win_width);
+    int y = (int)(my * copy.N / win_height);
+
+    if (x < 0 || y < 0 || x >= copy.N || y >= copy.N)
+        return 0;
+
+    *cx = x;
+    *cy = y;
+    return 1;
+}
+
+static void clear_flag_everywhere(maze_t *maze, int flag)
+{
+    int N = maze->N;
+    for (int i = 0; i < N*N; ++i)
+        maze->walls[i] &= ~flag;
+}
+
+static void apply_custom_tool(int x, int y)
+{
+    if (!custom_mode)
+        return;
+
+    int N = maze.N;
+    int idx = IX(x, y, N);
+
+    switch (custom_tool)
+    {
+        case TOOL_WALL:
+            if (!(maze.walls[idx] & START) && !(maze.walls[idx] & END))
+                maze.walls[idx] |= WALL;
+            break;
+
+        case TOOL_ERASE:
+            maze.walls[idx] &= ~(WALL | VISITED);
+            break;
+
+        case TOOL_START:
+            if (!(maze.walls[idx] & END))
+            {
+                clear_flag_everywhere(&maze, START);
+                maze.walls[idx] &= ~WALL;
+                maze.walls[idx] |= START;
+                sx = x;
+                sy = y;
+            }
+            break;
+
+        case TOOL_END:
+            if (!(maze.walls[idx] & START))
+            {
+                clear_flag_everywhere(&maze, END);
+                maze.walls[idx] &= ~WALL;
+                maze.walls[idx] |= END;
+                ex = x;
+                ey = y;
+            }
+            break;
+    }
+
+    free_maze(&copy);
+    copy_maze(&maze, &copy);
+}
 
 static void draw_scene()
 {
     int N = copy.N;
     float cellW = 2.0f / (float)N;
     float cellH = 2.0f / (float)N;
+
+    float pad = 0.075f;
+    float innerW = cellW * (1.0f - pad);
+    float innerH = cellH * (1.0f - pad);
+    float offsetX = (cellW - innerW) * 0.5f;
+    float offsetY = (cellH - innerH) * 0.5f;
 
     glUseProgram(mazeShader);
     glBindVertexArray(vao);
@@ -106,8 +212,8 @@ static void draw_scene()
         {
             int8_t info = copy.walls[IX(x, y, N)];
 
-            float ox = -1.0f + x * cellW;
-            float oy =  1.0f - (y + 1) * cellH;
+            float ox = -1.0f + x * cellW + offsetX;
+            float oy =  1.0f - (y + 1) * cellH + offsetY;
 
             float r = 1.0f, g = 1.0f, b = 1.0f;
 
@@ -139,7 +245,7 @@ static void draw_scene()
             }
 
             glUniform2f(uOffsetLoc, ox, oy);
-            glUniform2f(uScaleLoc, cellW, cellH);
+            glUniform2f(uScaleLoc, innerW, innerH);
             glUniform3f(uColorLoc, r, g, b);
 
             glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -195,6 +301,7 @@ static void switch_to_bf()
     copy_maze(&maze, &copy);
     init_bf(&copy, sx, sy);
     alg = bf_step;
+    menu.open = 0;
 }
 
 static void switch_to_df()
@@ -204,6 +311,7 @@ static void switch_to_df()
     copy_maze(&maze, &copy);
     init_df(&copy, sx, sy);
     alg = df_step;
+    menu.open = 0;
 }
 
 static void switch_to_astar()
@@ -229,12 +337,17 @@ static void make_new()
         init_df(&copy, sx, sy);
     if (mode == ASTAR)
         init_astar(&copy, sx, sy, ex, ey);
+    menu.open = 0;
 }
 
 static void create_custom_maze()
 {
     PAUSE = 1;
+    mode = CUSTOM;
+    custom_mode = 1;
 
+    copy_maze(&maze, &copy);
+    menu.open = 0;
 }
 
 static void clear_maze()
@@ -247,45 +360,119 @@ static void clear_maze()
         init_df(&copy, sx, sy);
     if (mode == ASTAR)
         init_astar(&copy, sx, sy, ex, ey);
+    menu.open = 0;
+}
+
+static void open_main_menu(double x, double y)
+{
+    menu.open = 1;
+    menu.kind = MENU_MAIN,
+    menu.x = x;
+    menu.y = y;
+    menu.w = 180.0f;
+    menu.h = 28.0f;
+    menu.hover = -1;
+    menu.count = 6;
+
+    menu.items[0] = (menu_item_t){ "Run BFS",       ACT_RUN_BFS };
+    menu.items[1] = (menu_item_t){ "Run DFS",       ACT_RUN_DFS };
+    menu.items[2] = (menu_item_t){ "Run A*",        ACT_RUN_ASTAR };
+    menu.items[3] = (menu_item_t){ "New Maze",      ACT_NEW_MAZE };
+    menu.items[4] = (menu_item_t){ "Custom Maze",   ACT_CUSTOM_MAZE };
+    menu.items[5] = (menu_item_t){ "Clear",         ACT_CLEAR };
+
+    float total_h = menu.h * menu.count;
+    if (menu.x + menu.w > win_width)
+        menu.x = win_width - menu.w;
+    if (menu.y + total_h > win_height)
+        menu.y = win_height - menu.h;
+    if (menu.x < 0)
+        menu.x = 0;
+    if (menu.y < 0)
+        menu.y = 0;
+}
+
+static void open_heuristic_menu(double x, double y)
+{
+    menu.open = 1;
+    menu.kind = MENU_HEURISTIC;
+    menu.x = x;
+    menu.y = y;
+    menu.w = 220.0f;
+    menu.h = 28.0f;
+    menu.hover = -1;
+    menu.count = 4;
+
+    menu.items[0] = (menu_item_t){ "Manhattan",     ACT_H_MANHATTAN };
+    menu.items[1] = (menu_item_t){ "Euclidean",     ACT_H_EUCLIDEAN };
+    menu.items[2] = (menu_item_t){ "Chebyshev",     ACT_H_CHEBYSHEV };
+    menu.items[3] = (menu_item_t){ "Back",          ACT_BACK };
+
+    float total_h = menu.h * menu.count;
+    if (menu.x + menu.w > win_width)
+        menu.x = win_width - menu.w;
+    if (menu.y + total_h > win_height)
+        menu.y = win_height - menu.h;
+    if (menu.x < 0)
+        menu.x = 0;
+    if (menu.y < 0)
+        menu.y = 0;
 }
 
 static void do_menu_action(int id)
 {
     switch (id)
     {
-        case 1:
-            printf("Run BFS\n");
+        case ACT_RUN_BFS:
             switch_to_bf();
             break;
 
-        case 2:
-            printf("Run DFS\n");
+        case ACT_RUN_DFS:
             switch_to_df();
             break;
 
-        case 3:
-            printf("Run A*\n");
-            switch_to_astar();
+        case ACT_RUN_ASTAR:
+            open_heuristic_menu(menu.x + menu.w + 4.0, menu.y);
             break;
 
-        case 4:
-            printf("New Maze\n");
+        case ACT_NEW_MAZE:
             make_new();
             break;
 
-        case 5:
-            printf("Custom Maze\n");
+        case ACT_CUSTOM_MAZE:
             create_custom_maze();
             break;
 
-        case 6:
-            printf("Clear\n");
+        case ACT_CLEAR:
             clear_maze();
+            break;
+
+        case ACT_H_MANHATTAN:
+            h = manhattan_dist;
+            switch_to_astar();
+            menu.open = 0;
+            break;
+
+        case ACT_H_EUCLIDEAN:
+            h = euclidean_dist;
+            switch_to_astar();
+            menu.open = 0;
+            break;
+
+        case ACT_H_CHEBYSHEV:
+            h = chebyshev_dist;
+            switch_to_astar();
+            menu.open = 0;
+            break;
+
+        case ACT_BACK:
+            open_main_menu(menu.x, menu.y);
             break;
     }
 }
 
 static int HOLDING = 0;
+static int LEFT_DOWN = 0;
 static void process_input(GLFWwindow *window)
 {
     int ESC = glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS;
@@ -297,6 +484,12 @@ static void process_input(GLFWwindow *window)
     int BK = glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS;
     int DK = glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS;
     int AK = glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS;
+
+    int K1 = glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS;
+    int K2 = glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS;
+    int K3 = glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS;
+    int K4 = glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS;
+    int ENTER = glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS;
 
     if (!HOLDING && ESC)
         glfwSetWindowShouldClose(window, true);
@@ -337,13 +530,49 @@ static void process_input(GLFWwindow *window)
         switch_to_astar();
     }
 
+    if (!HOLDING && custom_mode && K1)
+    {
+        HOLDING = 1;
+        custom_tool = TOOL_WALL;
+    }
+
+    if (!HOLDING && custom_mode && K2)
+    {
+        HOLDING = 1;
+        custom_tool = TOOL_ERASE;
+    }
+
+    if (!HOLDING && custom_mode && K3)
+    {
+        HOLDING = 1;
+        custom_tool = TOOL_START;
+    }
+
+    if (!HOLDING && custom_mode && K4)
+    {
+        HOLDING = 1;
+        custom_tool = TOOL_END;
+    }
+
+    if (!HOLDING && custom_mode && ENTER)
+    {
+        HOLDING = 1;
+        custom_mode = 0;
+        copy_maze(&maze, &copy);
+
+        switch_to_bf();
+    }
+
     if (!HOLDING && SPACE)
     {
         HOLDING = 1;
         PAUSE = !PAUSE;
     }
 
-    if (!ESC && !CK && !SK && !NK && !BK && !DK && !AK && !SPACE)
+    if (!ESC &&
+        !CK && !SK && !NK && !BK && !DK && !AK &&
+        !K1 && !K2 && !K3 && !K4 && !ENTER &&
+        !SPACE)
         HOLDING = 0;
 }
 
@@ -351,44 +580,54 @@ static void cursor_position_callback(GLFWwindow *window, double xpos, double ypo
 {
     (void)window;
     menu.hover = menu_hit_test(xpos, ypos);
+
+    if (custom_mode && LEFT_DOWN)
+    {
+        int cx, cy;
+        if (screen_to_cell(xpos, ypos, &cx, &cy))
+            apply_custom_tool(cx, cy);
+    }
 }
 
 static void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
 {
     (void)mods;
 
-    if (action != GLFW_PRESS)
-        return;
-
     double mx, my;
     glfwGetCursorPos(window, &mx, &my);
 
-    if (button == GLFW_MOUSE_BUTTON_RIGHT)
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
     {
-        menu.open = 1;
-        menu.x = mx;
-        menu.y = my;
-
-        float total_h = menu.h * menu.count;
-        if (menu.x + menu.w > win_width)
-            menu.x = win_width - menu.w;
-        if (menu.y + total_h > win_height)
-            menu.y = win_height - total_h;
-        if (menu.x < 0)
-            menu.x = 0;
-        if (menu.y < 0)
-            menu.y = 0;
-
+        open_main_menu(mx, my);
         menu.hover = menu_hit_test(mx, my);
         return;
     }
 
     if (button == GLFW_MOUSE_BUTTON_LEFT)
     {
-        int hit = menu_hit_test(mx, my);
-        if (hit >= 0)
-            do_menu_action(menu.items[hit].id);
-        menu.open = 0;
+        if (custom_mode && action == GLFW_PRESS)
+        {
+            int cx, cy;
+            if (screen_to_cell(mx, my, &cx, &cy))
+                apply_custom_tool(cx, cy);
+            LEFT_DOWN = 1;
+            return;
+        }
+
+        if (custom_mode && action == GLFW_RELEASE)
+        {
+            LEFT_DOWN = 0;
+            return;
+        }
+
+        if (action == GLFW_PRESS)
+        {
+            int hit = menu_hit_test(mx, my);
+            if (hit >= 0)
+                do_menu_action(menu.items[hit].id);
+            else
+                menu.open = 0;
+        }
     }
 }
 

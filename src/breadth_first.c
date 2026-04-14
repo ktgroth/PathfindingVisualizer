@@ -65,7 +65,6 @@ void bf_step(maze_t *maze)
     int x = curr.x, y = curr.y;
 
     int cidx = IX(x, y, N);
-    maze->walls[cidx] |= VISITED;
 
     if (maze->walls[cidx] & END)
     {
@@ -73,7 +72,7 @@ void bf_step(maze_t *maze)
         return;
     }
 
-    for (int dir = 0; dir < 4; ++dir)
+    for (int dir = 0; dir < 8; ++dir)
     {
         int dx = ddirs[dir][0], dy = ddirs[dir][1];
         int nx = x + dx, ny = y + dy;
@@ -85,6 +84,7 @@ void bf_step(maze_t *maze)
         if (maze->walls[idx] & (VISITED | WALL))
             continue;
 
+        maze->walls[idx] |= VISITED;
         queue[queue_end++] = (cell_t){ nx, ny };
     }
 }

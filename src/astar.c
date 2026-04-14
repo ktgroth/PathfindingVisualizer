@@ -1,24 +1,36 @@
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <math.h>
 
 #include "include/astar.h"
 #include "include/heap.h"
 #include "include/heuristic.h"
 
+
+#define SQRT2 1.41421356f
+
 cell_t start, end;
 heap_t heap;
-int *gscore;
+float *gscore;
 
 extern volatile heuristic h;
 
 void init_astar(maze_t *maze, int sx, int sy, int ex, int ey)
 {
+    if (gscore)
+    {
+        free_heap(&heap);
+        free(gscore);
+        gscore = NULL;
+    }
+
     int N = maze->N;
     if (init_heap(&heap, N))
         return;
 
-    gscore = (int *)calloc(N*N, sizeof(int));
+    gscore = (float *)calloc(N*N, sizeof(float));
     if (!gscore)
     {
         free_heap(&heap);
@@ -26,61 +38,14 @@ void init_astar(maze_t *maze, int sx, int sy, int ex, int ey)
     }
 
     for (int i = 0; i < N*N; ++i)
-        gscore[i] = INT_MAX;
+        gscore[i] = INFINITY;
 
-    gscore[IX(sx, sy, N)] = 0;
     start = (cell_t){ sx, sy };
     end = (cell_t){ ex, ey };
-    heap_insert(&heap, start, h(start, end));
-}
 
-void astar_search(maze_t *maze)
-{
-    int N = maze->N;
-    init_heap(&heap, N);
-
-    gscore = (int *)calloc(N*N, sizeof(int));
-    if (!gscore)
-    {
-        free_heap(&heap);
-        return;
-    }
-
-    for (int i = 0; i < N*N; ++i)
-        gscore[i] = INT_MAX;
-
-    start = (cell_t){ 1, 0 }, end = (cell_t){ N - 1, N - 2 };
-    gscore[IX(start.x, start.y, N)] = 0;
-    heap_insert(&heap, start, h(start, end));
-    while (heap.size > 0)
-    {
-        cell_t curr = heap_extract_min(&heap);
-        int x = curr.x, y = curr.y;
-        maze->walls[IX(x, y, N)] |= VISITED;
-
-        for (int dir = 0; dir < 4; ++dir)
-        {
-            int dx = ddirs[dir][0], dy = ddirs[dir][1];
-            int nx = x + dx, ny = y + dy;
-
-            if (nx < 0 || ny < 0 || nx >= N || ny >= N)
-                continue;
-
-            int idx = IX(nx, ny, N);
-            if (maze->walls[idx] & (VISITED | WALL))
-                continue;
-
-            if (maze->walls[idx] & END)
-                heap.size = 0;
-
-            if (gscore[idx] > gscore[IX(x, y, N)] + 1)
-                gscore[idx] = gscore[IX(x, y, N)] + 1;
-            cell_t next = (cell_t){ nx, ny };
-            heap_insert(&heap, next, gscore[idx] + h(next, end));
-        }
-    }
-
-    free_heap(&heap);
+    gscore[IX(sx, sy, N)] = 0;
+    float hscore = h(start, end);
+    heap_insert(&heap, start, hscore, hscore);
 }
 
 void astar_step(maze_t *maze)
@@ -91,9 +56,13 @@ void astar_step(maze_t *maze)
     int N = maze->N;
     cell_t curr = heap_extract_min(&heap);
     int x = curr.x, y = curr.y;
-
     int cidx = IX(x, y, N);
+
+    if (maze->walls[cidx] & VISITED)
+        return;
+
     maze->walls[cidx] |= VISITED;
+    printf("(%d, %d) ~ (%g, %g)\n", x, y, gscore[cidx], h(curr, end));
 
     if (maze->walls[cidx] & END)
     {
@@ -101,7 +70,7 @@ void astar_step(maze_t *maze)
         return;
     }
 
-    for (int dir = 0; dir < 4; ++dir)
+    for (int dir = 0; dir < 8; ++dir)
     {
         int dx = ddirs[dir][0], dy = ddirs[dir][1];
         int nx = x + dx, ny = y + dy;
@@ -113,12 +82,14 @@ void astar_step(maze_t *maze)
         if (maze->walls[idx] & (VISITED | WALL))
             continue;
 
-        int tentative_g = gscore[cidx] + 1;
+        float step_cost = (dx != 0 && dy != 0) ? SQRT2 : 1.0f;
+        float tentative_g = gscore[cidx] + step_cost;
         if (tentative_g < gscore[idx])
         {
-            gscore[idx] = tentative_g;
             cell_t next = (cell_t){ nx, ny };
-            heap_insert(&heap, next, gscore[idx] + h(next, end));
+            gscore[idx] = tentative_g;
+            float hscore = h(next, end);
+            heap_insert(&heap, next, gscore[idx] + hscore, hscore);
         }
     }
 }

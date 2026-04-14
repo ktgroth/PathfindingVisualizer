@@ -8,7 +8,8 @@
 typedef struct
 {
     cell_t pos;
-    int f;
+    float f;
+    float h;
 } node_t;
 
 typedef struct
@@ -20,7 +21,7 @@ typedef struct
 
 int init_heap(heap_t *heap, int N);
 void free_heap(heap_t *heap);
-void heap_insert(heap_t *heap, cell_t pos, int f);
+void heap_insert(heap_t *heap, cell_t pos, float f, float h);
 cell_t heap_extract_min(heap_t *heap);
 
 #endif

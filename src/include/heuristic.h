@@ -5,10 +5,12 @@
 #include "maze_generator.h"
 
 
-typedef int (*heuristic)(cell_t pos, cell_t end);
+typedef float (*heuristic)(cell_t pos, cell_t end);
 
 
-int manhattan_dist(cell_t pos, cell_t end);
+float manhattan_dist(cell_t pos, cell_t end);
+float euclidean_dist(cell_t pos, cell_t end);
+float chebyshev_dist(cell_t pos, cell_t end);
 
 #endif
 

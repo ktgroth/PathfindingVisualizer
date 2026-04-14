@@ -27,36 +27,35 @@ void free_heap(heap_t *heap)
     heap->size = 0;
 }
 
-void heap_insert(heap_t *heap, cell_t pos, int f)
+static int node_less(node_t a, node_t b)
 {
-    int size = heap->size;
-    node_t node = (node_t){ pos, f };
+    if (a.f < b.f)
+        return 1;
+    if (a.f > b.f)
+        return 0;
 
-    if (size == 0)
+    return a.h < b.h;
+}
+
+void heap_insert(heap_t *heap, cell_t pos, float f, float h)
+{
+    node_t node = (node_t){ pos, f, h };
+
+    int idx = heap->size++;
+    heap->queue[idx] = node;
+
+    while (idx > 0)
     {
-        heap->size = 1;
-        heap->queue[0] = node;
-        return;
+        int pidx = (idx - 1) / 2;
+        if (!node_less(heap->queue[idx], heap->queue[pidx]))
+            break;
+
+        node_t tmp = heap->queue[pidx];
+        heap->queue[pidx] = heap->queue[idx];
+        heap->queue[idx] = tmp;
+
+        idx = pidx;
     }
-
-    int i;
-    for (i = 0; i < size; ++i)
-    {
-        int ef = heap->queue[i].f;
-
-        if (ef > f)
-        {
-            for (int j = size; j > i; --j)
-                heap->queue[j] = heap->queue[j - 1];
-
-            heap->queue[i] = node;
-            ++heap->size;
-            return;
-        }
-    }
-
-    heap->queue[i] = node;
-    ++heap->size;
 }
 
 cell_t heap_extract_min(heap_t *heap)
@@ -66,9 +65,30 @@ cell_t heap_extract_min(heap_t *heap)
         return (cell_t){ -1, -1 };
 
     cell_t pos = heap->queue[0].pos;
-    --heap->size;
-    for (int i = 0; i < heap->size; ++i)
-        heap->queue[i] = heap->queue[i + 1];
+    int idx = --heap->size;
+    heap->queue[0] = heap->queue[idx];
+
+    idx = 0;
+    while (1)
+    {
+        int lidx = 2*idx + 1;
+        int ridx = 2*idx + 2;
+        int smallest = idx;
+
+        if (lidx < heap->size && node_less(heap->queue[lidx], heap->queue[smallest]))
+            smallest = lidx;
+        if (ridx < heap->size && node_less(heap->queue[ridx], heap->queue[smallest]))
+            smallest = ridx;
+
+        if (smallest == idx)
+            break;
+
+        node_t tmp = heap->queue[smallest];
+        heap->queue[smallest] = heap->queue[idx];
+        heap->queue[idx] = tmp;
+
+        idx = smallest;
+    }
 
     return pos;
 }
