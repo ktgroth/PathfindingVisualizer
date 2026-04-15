@@ -23,7 +23,8 @@ typedef struct
 typedef enum
 {
     MENU_MAIN,
-    MENU_HEURISTIC
+    MENU_HEURISTIC,
+    MENU_CUSTOM
 } menu_kind_t;
 
 typedef enum
@@ -44,6 +45,14 @@ typedef enum
 #define ACT_H_MANHATTAN     101
 #define ACT_H_EUCLIDEAN     102
 #define ACT_H_CHEBYSHEV     103
+
+#define ACT_DRAW_START      111
+#define ACT_DRAW_GOAL       112
+#define ACT_DRAW_WALL       113
+#define ACT_DRAW_ERASE      114
+#define ACT_DRAW_CLEAR      115
+#define ACT_DRAW_FINISH     116
+
 #define ACT_BACK            199
 
 typedef struct
@@ -139,13 +148,6 @@ static int screen_to_cell(double mx, double my, int *cx, int *cy)
     return 1;
 }
 
-static void clear_flag_everywhere(maze_t *maze, int flag)
-{
-    int N = maze->N;
-    for (int i = 0; i < N*N; ++i)
-        maze->walls[i] &= ~flag;
-}
-
 static void apply_custom_tool(int x, int y)
 {
     if (!custom_mode)
@@ -225,12 +227,17 @@ static void draw_scene()
             } else if (info & START)
             {
                 r = 0.0f;
-                g = 1.0f;
-                b = 0.0f;
+                g = 0.0f;
+                b = 1.0f;
             } else if (info & END)
             {
                 r = 1.0f;
                 g = 0.0f;
+                b = 0.0f;
+            } else if (info & (PATH_CURRENT | PATH_FINAL))
+            {
+                r = 0.0f;
+                g = 1.0f;
                 b = 0.0f;
             } else if (info & VISITED)
             {
@@ -298,6 +305,7 @@ static void switch_to_bf()
 {
     PAUSE = 1;
     mode = BF;
+    dir_size = 4;
     copy_maze(&maze, &copy);
     init_bf(&copy, sx, sy);
     alg = bf_step;
@@ -308,6 +316,7 @@ static void switch_to_df()
 {
     PAUSE = 1;
     mode = DF;
+    dir_size = 4;
     copy_maze(&maze, &copy);
     init_df(&copy, sx, sy);
     alg = df_step;
@@ -318,6 +327,7 @@ static void switch_to_astar()
 {
     PAUSE = 1;
     mode = ASTAR;
+    dir_size = 4;
     copy_maze(&maze, &copy);
     init_astar(&copy, sx, sy, ex, ey);
     alg = astar_step;
@@ -329,7 +339,7 @@ static void make_new()
     free_maze(&maze);
     free_maze(&copy);
 
-    init_maze(&maze, N);
+    init_maze(&maze, N, sx, sy, ex, ey);
     copy_maze(&maze, &copy);
     if (mode == BF)
         init_bf(&copy, sx, sy);
@@ -419,6 +429,35 @@ static void open_heuristic_menu(double x, double y)
         menu.y = 0;
 }
 
+static void open_custom_menu(double x, double y)
+{
+    menu.open = 1;
+    menu.kind = MENU_HEURISTIC;
+    menu.x = x;
+    menu.y = y;
+    menu.w = 220.0f;
+    menu.h = 28.0f;
+    menu.hover = -1;
+    menu.count = 6;
+
+    menu.items[0] = (menu_item_t){ "Start",     ACT_DRAW_START };
+    menu.items[1] = (menu_item_t){ "Goal",      ACT_DRAW_GOAL };
+    menu.items[2] = (menu_item_t){ "Wall",      ACT_DRAW_WALL };
+    menu.items[3] = (menu_item_t){ "Erase",     ACT_DRAW_ERASE };
+    menu.items[4] = (menu_item_t){ "Clear",     ACT_DRAW_CLEAR };
+    menu.items[5] = (menu_item_t){ "Finish",    ACT_DRAW_FINISH };
+
+    float total_h = menu.h * menu.count;
+    if (menu.x + menu.w > win_width)
+        menu.x = win_width - menu.w;
+    if (menu.y + total_h > win_height)
+        menu.y = win_height - menu.h;
+    if (menu.x < 0)
+        menu.x = 0;
+    if (menu.y < 0)
+        menu.y = 0;
+}
+
 static void do_menu_action(int id)
 {
     switch (id)
@@ -456,12 +495,52 @@ static void do_menu_action(int id)
         case ACT_H_EUCLIDEAN:
             h = euclidean_dist;
             switch_to_astar();
+            dir_size = 8;
             menu.open = 0;
             break;
 
         case ACT_H_CHEBYSHEV:
             h = chebyshev_dist;
             switch_to_astar();
+            menu.open = 0;
+            break;
+
+        case ACT_DRAW_START:
+            custom_tool = TOOL_START;
+            menu.open = 0;
+            break;
+
+        case ACT_DRAW_GOAL:
+            custom_tool = TOOL_END;
+            menu.open = 0;
+            break;
+
+        case ACT_DRAW_WALL:
+            custom_tool = TOOL_WALL;
+            menu.open = 0;
+            break;
+
+        case ACT_DRAW_ERASE:
+            custom_tool = TOOL_ERASE;
+            menu.open = 0;
+            break;
+
+        case ACT_DRAW_CLEAR:
+            int N = maze.N;
+            for (int i = 0; i < N*N; ++i)
+                maze.walls[i] = OPEN;
+            maze.walls[0] = START;
+            maze.walls[IX(N-1, N-1, N)] = END;
+
+            free_maze(&copy);
+            copy_maze(&maze, &copy);
+            menu.open = 0;
+            break;
+
+        case ACT_DRAW_FINISH:
+            custom_mode = 0;
+            copy_maze(&maze, &copy);
+            switch_to_bf();
             menu.open = 0;
             break;
 
@@ -598,6 +677,13 @@ static void mouse_button_callback(GLFWwindow *window, int button, int action, in
 
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
     {
+        if (custom_mode)
+        {
+            open_custom_menu(mx, my);
+            menu.hover = menu_hit_test(mx, my);
+            return;
+        }
+
         open_main_menu(mx, my);
         menu.hover = menu_hit_test(mx, my);
         return;
@@ -605,15 +691,6 @@ static void mouse_button_callback(GLFWwindow *window, int button, int action, in
 
     if (button == GLFW_MOUSE_BUTTON_LEFT)
     {
-        if (custom_mode && action == GLFW_PRESS)
-        {
-            int cx, cy;
-            if (screen_to_cell(mx, my, &cx, &cy))
-                apply_custom_tool(cx, cy);
-            LEFT_DOWN = 1;
-            return;
-        }
-
         if (custom_mode && action == GLFW_RELEASE)
         {
             LEFT_DOWN = 0;
@@ -624,11 +701,60 @@ static void mouse_button_callback(GLFWwindow *window, int button, int action, in
         {
             int hit = menu_hit_test(mx, my);
             if (hit >= 0)
+            {
                 do_menu_action(menu.items[hit].id);
+                return;
+            }
             else
                 menu.open = 0;
         }
+
+        if (custom_mode && action == GLFW_PRESS)
+        {
+            int cx, cy;
+            if (screen_to_cell(mx, my, &cx, &cy))
+                apply_custom_tool(cx, cy);
+            LEFT_DOWN = 1;
+            return;
+        }
     }
+}
+
+static void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
+{
+    (void)window;
+    (void)xoffset;
+
+    if (yoffset > 0.0)
+        N += 2;
+    else
+        N -= 2;
+
+    sx = 1;
+    sy = 0;
+    ex = N - 1;
+    ey = N - 2;
+    free_maze(&maze);
+    if (init_maze(&maze, N, sx, sy, ex, ey))
+        return;
+
+    if (collection)
+    {
+        free(collection);
+        collection = NULL;
+    }
+
+    collection = (cell_t *)malloc(N*N * sizeof(cell_t));
+    if (!collection)
+    {
+        perror("Allocating collection");
+        return;
+    }
+
+    int mode = BF;
+    free_maze(&copy);
+    copy_maze(&maze, &copy);
+    init_bf(&copy, sx, sy);
 }
 
 static float to_ndc_x(float x)
@@ -859,6 +985,7 @@ GLFWwindow *init_graphics()
     glfwSetWindowSizeCallback(window, window_size_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 
     if (init_text("fonts/FiraCodeNerdFontMono-Bold.ttf"))
     {
@@ -876,7 +1003,7 @@ GLFWwindow *init_graphics()
     N = 2*n + 1;
     ex = N - 1;
     ey = N - 2;
-    if (init_maze(&maze, N))
+    if (init_maze(&maze, N, sx, sy, ex, ey))
         return NULL;
 
     collection = (cell_t *)malloc(N*N * sizeof(cell_t));

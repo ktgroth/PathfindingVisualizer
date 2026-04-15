@@ -6,8 +6,17 @@
 
 #include "include/maze_generator.h"
 
+int dir_size = 4;
 
-int init_maze(maze_t *maze, int N)
+
+void clear_flag_everywhere(maze_t *maze, int flag)
+{
+    int N = maze->N;
+    for (int i = 0; i < N*N; ++i)
+        maze->walls[i] &= ~flag;
+}
+
+int init_maze(maze_t *maze, int N, int sx, int sy, int ex, int ey)
 {
     if (!maze || N < 3 || N % 2 == 0)
         return 1;
@@ -36,14 +45,14 @@ int init_maze(maze_t *maze, int N)
     stack[0] = (cell_t){ 1, 1 };
     int stack_top = 0;
 
-    maze->walls[IX(1, 0, N)] = OPEN | START;
+    maze->walls[IX(sx, sy, N)] = OPEN | START;
     while (stack_top >= 0)
     {
         int x = stack[stack_top].x, y = stack[stack_top].y;
 
         int possible[4];
         int count = 0;
-        for (int dir = 0; dir < 4; ++dir)
+        for (int dir = 0; dir < dir_size; ++dir)
         {
             int dx = dirs[dir][0], dy = dirs[dir][1];
             int nx = x + dx, ny = y + dy;
@@ -72,7 +81,7 @@ int init_maze(maze_t *maze, int N)
         maze->walls[IX(nx, ny, N)] = OPEN;
         stack[++stack_top] = (cell_t){ nx, ny };
     }
-    maze->walls[IX(N - 1, N - 2, N)] = OPEN | END;
+    maze->walls[IX(ex, ey, N)] = OPEN | END;
 
     free(stack);
     return 0;
