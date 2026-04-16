@@ -113,6 +113,7 @@ static menu_t menu = {
 static glyph_t glyphs[128];
 
 static cell_t *collection;
+int size;
 static GLuint vao, vbo;
 static GLuint textVAO, textVBO;
 static program_t mazeShader;
@@ -725,6 +726,7 @@ static void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
     (void)window;
     (void)xoffset;
 
+    PAUSE = 1;
     if (yoffset > 0.0)
         N += 2;
     else
@@ -1001,12 +1003,13 @@ GLFWwindow *init_graphics()
 
     int n = 25;
     N = 2*n + 1;
+    size = N * N;
     ex = N - 1;
     ey = N - 2;
     if (init_maze(&maze, N, sx, sy, ex, ey))
         return NULL;
 
-    collection = (cell_t *)malloc(N*N * sizeof(cell_t));
+    collection = (cell_t *)malloc(size * sizeof(cell_t));
     if (!collection)
     {
         perror("Allocating collection");
@@ -1067,6 +1070,11 @@ void free_graphics(GLFWwindow *window)
 cell_t *get_collection()
 {
     return collection;
+}
+
+void set_collection(cell_t *coll)
+{
+    collection = coll;
 }
 
 void draw_loop(GLFWwindow *window)

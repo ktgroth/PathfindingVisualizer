@@ -15,7 +15,7 @@ typedef struct
 typedef struct
 {
     node_t *queue;
-    int size;
+    int size, capacity;
 } heap_t;
 
 

@@ -7,6 +7,7 @@
 
 
 static cell_t *queue;
+extern int size;
 static int queue_start, queue_end;
 static int *parent;
 
@@ -39,6 +40,7 @@ void bf_step(maze_t *maze)
     cell_t curr = queue[queue_start++];
     int x = curr.x, y = curr.y;
     int cidx = IX(x, y, N);
+    maze->walls[cidx] |= VISITED;
 
     clear_flag_everywhere(maze, PATH_CURRENT);
 
@@ -74,11 +76,25 @@ void bf_step(maze_t *maze)
             continue;
 
         int idx = IX(nx, ny, N);
-        if (maze->walls[idx] & (VISITED | WALL))
+        if (maze->walls[idx] & (ADDED | VISITED | WALL))
             continue;
 
         parent[idx] = cidx;
-        maze->walls[idx] |= VISITED;
+        maze->walls[idx] |= ADDED;
+        if (queue_end >= size)
+        {
+            cell_t *new_queue = realloc(queue, size * 2);
+            if (!new_queue)
+            {
+                perror("Changing queue size");
+                return;
+            }
+
+            size *= 2;
+            queue = new_queue;
+            set_collection(queue);
+        }
+
         queue[queue_end++] = (cell_t){ nx, ny };
     }
 }

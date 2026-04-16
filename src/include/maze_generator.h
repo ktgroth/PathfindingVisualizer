@@ -12,6 +12,7 @@
 #define END             0b00010000
 #define PATH_CURRENT    0b00100000
 #define PATH_FINAL      0b01000000
+#define ADDED           0b10000000
 
 #define IX(x, y, N) ((y) * (N) + (x))
 

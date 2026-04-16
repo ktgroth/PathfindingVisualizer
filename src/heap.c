@@ -15,6 +15,7 @@ int init_heap(heap_t *heap, int N)
     }
 
     heap->size = 0;
+    heap->capacity = N*N;
     return 0;
 }
 
@@ -40,6 +41,19 @@ static int node_less(node_t a, node_t b)
 void heap_insert(heap_t *heap, cell_t pos, float f, float h)
 {
     node_t node = (node_t){ pos, f, h };
+
+    if (heap->size >= heap->capacity)
+    {
+        node_t *new_queue = (node_t *)realloc(heap->queue, heap->capacity * 2);
+        if (!new_queue)
+        {
+            perror("Changing heap size");
+            return;
+        }
+
+        heap->capacity *= 2;
+        heap->queue = new_queue;
+    }
 
     int idx = heap->size++;
     heap->queue[idx] = node;

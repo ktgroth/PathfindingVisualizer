@@ -7,6 +7,7 @@
 
 
 static cell_t *stack;
+extern int size;
 static int stack_top = 0;
 static int *parent;
 
@@ -23,6 +24,8 @@ void init_df(maze_t *maze, int x, int y)
         parent[i] = -1;
 
     stack = get_collection();
+    size = N*N;
+
     stack[0] = (cell_t){ x, y };
     stack_top = 1;
 
@@ -38,6 +41,7 @@ void df_step(maze_t *maze)
     cell_t curr = stack[--stack_top];
     int x = curr.x, y = curr.y;
     int cidx = IX(x, y, N);
+    maze->walls[cidx] |= VISITED;
 
     clear_flag_everywhere(maze, PATH_CURRENT);
 
@@ -73,11 +77,25 @@ void df_step(maze_t *maze)
             continue;
 
         int idx = IX(nx, ny, N);
-        if (maze->walls[idx] & (VISITED | WALL))
+        if (maze->walls[idx] & (ADDED | VISITED | WALL))
             continue;
 
-        maze->walls[idx] |= VISITED;
         parent[idx] = cidx;
+        maze->walls[idx] |= ADDED;
+        if (stack_top >= size)
+        {
+            cell_t *new_stack = realloc(stack, size * 2);
+            if (!new_stack)
+            {
+                perror("Changing stack size");
+                return;
+            }
+
+            size *= 2;
+            stack = new_stack;
+            set_collection(stack);
+        }
+
         stack[stack_top++] = (cell_t){ nx, ny };
     }
 }

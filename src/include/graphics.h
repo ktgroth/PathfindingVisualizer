@@ -13,9 +13,8 @@ typedef void (*step)(maze_t *maze);
 GLFWwindow *init_graphics();
 void free_graphics(GLFWwindow *window);
 cell_t *get_collection();
+void set_collection(cell_t *coll);
 void draw_loop(GLFWwindow *window);
-// void draw(maze_t *maze);
-// void update(maze_t *maze, step fn);
 
 #endif
 
