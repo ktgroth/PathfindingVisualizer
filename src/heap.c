@@ -21,10 +21,11 @@ int init_heap(heap_t *heap, int N)
 
 void free_heap(heap_t *heap)
 {
-    if (!heap)
+    if (!heap || heap->queue == NULL)
         return;
 
     free(heap->queue);
+    heap->queue = NULL;
     heap->size = 0;
 }
 

@@ -7,7 +7,7 @@
 
 
 static cell_t *stack;
-extern int size;
+extern int size, done;
 static int stack_top = 0;
 static int *parent;
 
@@ -24,17 +24,29 @@ void init_df(maze_t *maze, int x, int y)
         parent[i] = -1;
 
     stack = get_collection();
-    size = N*N;
+    if (!stack)
+    {
+        stack = (cell_t *)malloc(N*N * sizeof(cell_t));
+        if (!stack)
+        {
+            perror("Allocating new Collection");
+            return;
+        }
+
+        size = N*N;
+        set_collection(stack);
+    }
 
     stack[0] = (cell_t){ x, y };
     stack_top = 1;
 
     maze->walls[IX(x, y, maze->N)] |= VISITED;
+    done = 0;
 }
 
 void df_step(maze_t *maze)
 {
-    if (stack_top < 0)
+    if (done || stack_top <= 0)
         return;
 
     int N = maze->N;
@@ -47,8 +59,6 @@ void df_step(maze_t *maze)
 
     if (maze->walls[cidx] & END)
     {
-        stack_top = -1;
-
         int pidx = parent[cidx];
         maze->walls[cidx] |= PATH_FINAL;
         while (pidx > -1)
@@ -57,6 +67,7 @@ void df_step(maze_t *maze)
             pidx = parent[pidx];
         }
 
+        done = 1;
         return;
     }
 
@@ -81,22 +92,45 @@ void df_step(maze_t *maze)
             continue;
 
         parent[idx] = cidx;
-        maze->walls[idx] |= ADDED;
         if (stack_top >= size)
         {
-            cell_t *new_stack = realloc(stack, size * 2);
+            int new_size = size * 2;
+            printf("OLD SIZE: %d\n", size);
+
+            cell_t *new_stack = realloc(stack, new_size * sizeof(cell_t));
             if (!new_stack)
             {
                 perror("Changing stack size");
                 return;
             }
 
-            size *= 2;
+            size = new_size;
             stack = new_stack;
             set_collection(stack);
+            printf("NEW SIZE: %d\n", size);
         }
 
+        maze->walls[idx] |= ADDED;
         stack[stack_top++] = (cell_t){ nx, ny };
+
+        if (maze->walls[idx] & END)
+            return;
+    }
+}
+
+void df_clean()
+{
+    if (stack)
+    {
+        free(stack);
+        stack = NULL;
+        set_collection(NULL);
+    }
+
+    if (parent)
+    {
+        free(parent);
+        parent = NULL;
     }
 }
 

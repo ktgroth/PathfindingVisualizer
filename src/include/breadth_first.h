@@ -6,8 +6,8 @@
 
 
 void init_bf(maze_t *maze, int x, int y);
-void bf_search(maze_t *maze);
 void bf_step(maze_t *maze);
+void bf_clean();
 
 #endif
 

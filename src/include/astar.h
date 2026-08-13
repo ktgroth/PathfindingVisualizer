@@ -6,8 +6,8 @@
 
 
 void init_astar(maze_t *maze, int sx, int sy, int ex, int ey);
-void astar_search(maze_t *maze);
 void astar_step(maze_t *maze);
+void astar_clean();
 
 #endif
 

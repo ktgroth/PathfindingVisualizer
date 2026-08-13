@@ -9,10 +9,9 @@
 #include "include/heuristic.h"
 
 
-#define SQRT2 1.41421356f
-
 static cell_t start, end;
 static heap_t heap;
+extern int done;
 static float *gscore;
 static int *parent;
 
@@ -29,13 +28,6 @@ void init_astar(maze_t *maze, int sx, int sy, int ex, int ey)
     }
     for (int i = 0; i < N*N; ++i)
         parent[i] = -1;
-
-    if (gscore)
-    {
-        free_heap(&heap);
-        free(gscore);
-        gscore = NULL;
-    }
 
     if (init_heap(&heap, N))
         return;
@@ -56,11 +48,12 @@ void init_astar(maze_t *maze, int sx, int sy, int ex, int ey)
     gscore[IX(sx, sy, N)] = 0;
     float hscore = h(start, end);
     heap_insert(&heap, start, hscore, hscore);
+    done = 0;
 }
 
 void astar_step(maze_t *maze)
 {
-    if (heap.size <= 0)
+    if (done || heap.size <= 0)
         return;
 
     int N = maze->N;
@@ -72,11 +65,8 @@ void astar_step(maze_t *maze)
         return;
 
     clear_flag_everywhere(maze, PATH_CURRENT);
-
     if (maze->walls[cidx] & END)
     {
-        heap.size = 0;
-
         int pidx = parent[cidx];
         maze->walls[cidx] |= PATH_FINAL;
         while (pidx > -1)
@@ -85,6 +75,7 @@ void astar_step(maze_t *maze)
             pidx = parent[pidx];
         }
 
+        done = 1;
         return;
     }
 
@@ -123,6 +114,22 @@ void astar_step(maze_t *maze)
             else
                 heap_insert(&heap, next, gscore[idx] + hscore, hscore);
         }
+    }
+}
+
+void astar_clean()
+{
+    free_heap(&heap);
+    if (parent)
+    {
+        free(parent);
+        parent = NULL;
+    }
+
+    if (gscore)
+    {
+        free(gscore);
+        gscore = NULL;
     }
 }
 

@@ -6,8 +6,8 @@
 
 
 void init_df(maze_t *maze, int x, int y);
-void df_search(maze_t *maze);
 void df_step(maze_t *maze);
+void df_clean();
 
 #endif
 

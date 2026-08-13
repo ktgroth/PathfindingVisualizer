@@ -7,7 +7,7 @@
 
 
 static cell_t *queue;
-extern int size;
+extern int size, done;
 static int queue_start, queue_end;
 static int *parent;
 
@@ -25,15 +25,29 @@ void init_bf(maze_t *maze, int x, int y)
         parent[i] = -1;
 
     queue = get_collection();
+    if (!queue)
+    {
+        queue = (cell_t *)malloc(N*N * sizeof(cell_t));
+        if (!queue)
+        {
+            perror("Allocating new Collection");
+            return;
+        }
+
+        size = N*N;
+        set_collection(queue);
+    }
+
     queue[0] = (cell_t){ x, y };
     queue_start = 0, queue_end = 1;
 
     maze->walls[IX(x, y, maze->N)] |= VISITED;
+    done = 0;
 }
 
 void bf_step(maze_t *maze)
 {
-    if (queue_start >= queue_end)
+    if (done || queue_start >= queue_end)
         return;
 
     int N = maze->N;
@@ -43,11 +57,8 @@ void bf_step(maze_t *maze)
     maze->walls[cidx] |= VISITED;
 
     clear_flag_everywhere(maze, PATH_CURRENT);
-
     if (maze->walls[cidx] & END)
     {
-        queue_start = queue_end + 1;
-
         int pidx = parent[cidx];
         maze->walls[cidx] |= PATH_FINAL;
         while (pidx > -1)
@@ -56,6 +67,7 @@ void bf_step(maze_t *maze)
             pidx = parent[pidx];
         }
 
+        done = 1;
         return;
     }
 
@@ -80,22 +92,42 @@ void bf_step(maze_t *maze)
             continue;
 
         parent[idx] = cidx;
-        maze->walls[idx] |= ADDED;
         if (queue_end >= size)
         {
-            cell_t *new_queue = realloc(queue, size * 2);
+            int new_size = size * 2;
+            printf("OLD SIZE: %d\n", size);
+
+            cell_t *new_queue = realloc(queue, new_size * sizeof(cell_t));
             if (!new_queue)
             {
                 perror("Changing queue size");
                 return;
             }
 
-            size *= 2;
+            size = new_size;
             queue = new_queue;
             set_collection(queue);
+            printf("NEW SIZE: %d\n", size);
         }
 
+        maze->walls[idx] |= ADDED;
         queue[queue_end++] = (cell_t){ nx, ny };
+    }
+}
+
+void bf_clean()
+{
+    if (queue)
+    {
+        free(queue);
+        queue = NULL;
+        set_collection(NULL);
+    }
+
+    if (parent)
+    {
+        free(parent);
+        parent = NULL;
     }
 }
 

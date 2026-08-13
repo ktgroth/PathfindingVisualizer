@@ -42,9 +42,12 @@ typedef enum
 #define ACT_CUSTOM_MAZE     5
 #define ACT_CLEAR           6
 
-#define ACT_H_MANHATTAN     101
-#define ACT_H_EUCLIDEAN     102
-#define ACT_H_CHEBYSHEV     103
+#define ACT_H_MANHATTAN         101
+#define ACT_H_EUCLIDEAN         102
+#define ACT_H_SQUARED_EUCLIDEAN 103
+#define ACT_H_CHEBYSHEV         104
+#define ACT_H_COSINE            105
+#define ACT_H_OCTILE            106
 
 #define ACT_DRAW_START      111
 #define ACT_DRAW_GOAL       112
@@ -113,7 +116,7 @@ static menu_t menu = {
 static glyph_t glyphs[128];
 
 static cell_t *collection;
-int size;
+int size, done = 0;
 static GLuint vao, vbo;
 static GLuint textVAO, textVBO;
 static program_t mazeShader;
@@ -201,7 +204,7 @@ static void draw_scene()
     float cellW = 2.0f / (float)N;
     float cellH = 2.0f / (float)N;
 
-    float pad = 0.075f;
+    float pad = 0.1f;
     float innerW = cellW * (1.0f - pad);
     float innerH = cellH * (1.0f - pad);
     float offsetX = (cellW - innerW) * 0.5f;
@@ -263,6 +266,17 @@ static void draw_scene()
 
 static void update()
 {
+    if (done)
+    {
+        if (mode == BF)
+            bf_clean();
+        if (mode == DF)
+            df_clean();
+        if (mode == ASTAR)
+            astar_clean();
+        return;
+    }
+
     alg(&copy);
 }
 
@@ -412,12 +426,15 @@ static void open_heuristic_menu(double x, double y)
     menu.w = 220.0f;
     menu.h = 28.0f;
     menu.hover = -1;
-    menu.count = 4;
+    menu.count = 7;
 
-    menu.items[0] = (menu_item_t){ "Manhattan",     ACT_H_MANHATTAN };
-    menu.items[1] = (menu_item_t){ "Euclidean",     ACT_H_EUCLIDEAN };
-    menu.items[2] = (menu_item_t){ "Chebyshev",     ACT_H_CHEBYSHEV };
-    menu.items[3] = (menu_item_t){ "Back",          ACT_BACK };
+    menu.items[0] = (menu_item_t){ "Manhattan",         ACT_H_MANHATTAN };
+    menu.items[1] = (menu_item_t){ "Euclidean",         ACT_H_EUCLIDEAN };
+    menu.items[2] = (menu_item_t){ "Squared Euclidean", ACT_H_EUCLIDEAN };
+    menu.items[3] = (menu_item_t){ "Chebyshev",         ACT_H_CHEBYSHEV };
+    menu.items[4] = (menu_item_t){ "Cosine",            ACT_H_COSINE };
+    menu.items[5] = (menu_item_t){ "Octile",            ACT_H_OCTILE };
+    menu.items[6] = (menu_item_t){ "Back",              ACT_BACK };
 
     float total_h = menu.h * menu.count;
     if (menu.x + menu.w > win_width)
@@ -500,9 +517,30 @@ static void do_menu_action(int id)
             menu.open = 0;
             break;
 
+        case ACT_H_SQUARED_EUCLIDEAN:
+            h = squared_euclidean_dist;
+            switch_to_astar();
+            dir_size = 8;
+            menu.open = 0;
+            break;
+
         case ACT_H_CHEBYSHEV:
             h = chebyshev_dist;
             switch_to_astar();
+            menu.open = 0;
+            break;
+
+        case ACT_H_COSINE:
+            h = cosine_dist;
+            switch_to_astar();
+            dir_size = 8;
+            menu.open = 0;
+            break;
+
+        case ACT_H_OCTILE:
+            h = octile_dist;
+            switch_to_astar();
+            dir_size = 8;
             menu.open = 0;
             break;
 
@@ -530,8 +568,11 @@ static void do_menu_action(int id)
             int N = maze.N;
             for (int i = 0; i < N*N; ++i)
                 maze.walls[i] = OPEN;
-            maze.walls[0] = START;
-            maze.walls[IX(N-1, N-1, N)] = END;
+
+            sx = 0; sy = 0;
+            ex = N-1; ey = N-1;
+            maze.walls[IX(sx, sy, N)] = START;
+            maze.walls[IX(ex, ey, N)] = END;
 
             free_maze(&copy);
             copy_maze(&maze, &copy);
@@ -638,8 +679,8 @@ static void process_input(GLFWwindow *window)
     {
         HOLDING = 1;
         custom_mode = 0;
-        copy_maze(&maze, &copy);
 
+        free_maze(&copy);
         switch_to_bf();
     }
 
@@ -753,10 +794,9 @@ static void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
         return;
     }
 
-    int mode = BF;
+    size = N*N;
     free_maze(&copy);
-    copy_maze(&maze, &copy);
-    init_bf(&copy, sx, sy);
+    switch_to_bf();
 }
 
 static float to_ndc_x(float x)
@@ -1095,5 +1135,7 @@ void draw_loop(GLFWwindow *window)
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+
+    free_graphics(window);
 }
 
